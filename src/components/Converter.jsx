@@ -174,6 +174,7 @@ export default function Converter({ queue, setQueue, fileInputRef, fetchDefiniti
     try {
       setQueue((q) => q.map((f) => (f.id === item.id ? { ...f, status: 'processing', errorMessage: '' } : f)))
       let convertedBlob = null
+      let extra = {}
       if (isImage(item.file) && item.output) {
         const opts = {
           fileType: item.output,
@@ -209,28 +210,35 @@ export default function Converter({ queue, setQueue, fileInputRef, fetchDefiniti
       } else if (item.file.type === 'application/pdf' && item.output && item.output.startsWith('image/')) {
         const pdfjsLib = await import('pdfjs-dist/build/pdf')
         try {
-          // Use CDN worker to avoid bundler worker setup
           if (pdfjsLib && pdfjsLib.GlobalWorkerOptions) {
             pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'
           }
           const ab = await item.file.arrayBuffer()
           const doc = await pdfjsLib.getDocument({ data: ab }).promise
-          const page = await doc.getPage(1)
-          const baseViewport = page.getViewport({ scale: 1 })
-          const maxW = item.targetWidth || 4096
-          const maxH = item.targetHeight || 4096
-          const scale = Math.min(maxW / baseViewport.width, maxH / baseViewport.height)
-          const viewport = page.getViewport({ scale: isFinite(scale) && scale > 0 ? scale : 1 })
-          const canvas = document.createElement('canvas')
-          const ctx = canvas.getContext('2d')
-          canvas.width = Math.round(viewport.width)
-          canvas.height = Math.round(viewport.height)
-          await page.render({ canvasContext: ctx, viewport }).promise
           const mime = item.output || 'image/png'
           const q = typeof item.quality === 'number' ? item.quality : mime.includes('jpeg') ? 0.8 : 0.92
-          const dataUrl = canvas.toDataURL(mime, q)
-          const res = await fetch(dataUrl)
-          convertedBlob = await res.blob()
+          const maxPages = Math.min(doc.numPages || 1, 10)
+          const urls = []
+          const blobs = []
+          const canvas = document.createElement('canvas')
+          const ctx = canvas.getContext('2d')
+          for (let i = 1; i <= maxPages; i++) {
+            const page = await doc.getPage(i)
+            const baseViewport = page.getViewport({ scale: 1 })
+            const maxW = item.targetWidth || 4096
+            const maxH = item.targetHeight || 4096
+            const scale = Math.min(maxW / baseViewport.width, maxH / baseViewport.height)
+            const viewport = page.getViewport({ scale: isFinite(scale) && scale > 0 ? scale : 1 })
+            canvas.width = Math.round(viewport.width)
+            canvas.height = Math.round(viewport.height)
+            await page.render({ canvasContext: ctx, viewport }).promise
+            const dataUrl = canvas.toDataURL(mime, q)
+            urls.push(dataUrl)
+            const res = await fetch(dataUrl)
+            blobs.push(await res.blob())
+          }
+          convertedBlob = blobs[0]
+          extra = { convertedUrls: urls, convertedBlobs: blobs }
         } catch (err) {
           throw new Error('PDF render failed')
         }
@@ -253,7 +261,8 @@ export default function Converter({ queue, setQueue, fileInputRef, fetchDefiniti
                 convertedUrl: dataUrl,
                 countdownEnd,
                 remainingSec: Math.ceil((countdownEnd - Date.now()) / 1000),
-                errorMessage: ''
+                errorMessage: '',
+                ...extra
               }
             : f
         )
@@ -592,6 +601,36 @@ export default function Converter({ queue, setQueue, fileInputRef, fetchDefiniti
                   <button className="btn-ghost" onClick={() => setQueue((q) => q.filter((x) => x.id !== f.id))}>
                     Clean Now
                   </button>
+                </div>
+              )}
+
+              {f.status === 'complete' && Array.isArray(f.convertedUrls) && f.convertedUrls.length > 1 && (
+                <div className="mt-3">
+                  <div className="text-xs text-slate-400 mb-2">Pages ({f.convertedUrls.length})</div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {f.convertedUrls.map((u, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <img
+                          src={u}
+                          alt={`page ${idx + 1}`}
+                          className="h-10 w-10 object-cover rounded border border-green-700"
+                          onMouseEnter={(e) => {
+                            const rect = e.currentTarget.getBoundingClientRect()
+                            setZoom({ show: true, url: u, x: rect.right + 8, y: rect.top })
+                          }}
+                          onMouseLeave={() => setZoom((z) => ({ ...z, show: false }))}
+                          onMouseMove={(e) => setZoom((z) => ({ ...z, x: e.clientX + 12, y: e.clientY - 12 }))}
+                        />
+                        <a
+                          href={u}
+                          download={`${(f.name || 'file').replace(/\.[^./]+$/, '')}-p${idx + 1}.${(f.output.split('/')[1] || 'png').replace('jpeg','jpg')}`}
+                          className="btn-ghost text-xs"
+                        >
+                          Download p{idx + 1}
+                        </a>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
