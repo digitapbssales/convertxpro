@@ -28,11 +28,13 @@ class HomeScreen extends StatelessWidget {
     final controller = TextEditingController();
     final bannerSvc = BannerService();
     final cache = CacheService();
+    final l = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Universal Converter'), actions: [
+      appBar: AppBar(title: Text(l.t('app_title')), actions: [
         IconButton(onPressed: () => _router(context).go('/favorites'), icon: const Icon(Icons.star)),
         IconButton(onPressed: () => _router(context).go('/history'), icon: const Icon(Icons.history)),
         IconButton(onPressed: () => _router(context).go('/auth'), icon: const Icon(Icons.person)),
+        IconButton(onPressed: () => _router(context).go('/admin'), icon: const Icon(Icons.campaign)),
       ]),
       body: FutureBuilder(
         future: bannerSvc.loadActive(),
@@ -54,7 +56,7 @@ class HomeScreen extends StatelessWidget {
                   ]),
                 ),
               const SizedBox(height: 12),
-              TextField(controller: controller, decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search')), 
+              TextField(controller: controller, decoration: InputDecoration(prefixIcon: const Icon(Icons.search), hintText: l.t('search'))), 
               const SizedBox(height: 12),
               GridView.count(
                 crossAxisCount: 2,
@@ -65,7 +67,7 @@ class HomeScreen extends StatelessWidget {
                 children: filtered,
               ),
               const SizedBox(height: 16),
-              if (recent.isNotEmpty) Text('Recent', style: Theme.of(context).textTheme.titleMedium),
+              if (recent.isNotEmpty) Text(l.t('recent'), style: Theme.of(context).textTheme.titleMedium),
               for (final x in recent) ListTile(title: Text('${x['category']} ${x['from']}→${x['to']}'), subtitle: Text('${x['value']} = ${x['result']}')),
             ],
           );

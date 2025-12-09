@@ -6,6 +6,7 @@ import '../services/currency_service.dart';
 import '../services/crypto_service.dart';
 import '../services/supabase_service.dart';
 import '../services/cache_service.dart';
+import '../localization/app_localizations.dart';
 
 final _engine = ConversionEngine();
 final _currency = CurrencyService();
@@ -26,6 +27,8 @@ class _ConversionScreenState extends ConsumerState<ConversionScreen> {
   double result = 0;
   Map<String, double> rates = {};
   final _cache = CacheService();
+  String error = '';
+  List<String> currencyUnits = [];
   @override
   void initState() {
     super.initState();
@@ -40,12 +43,18 @@ class _ConversionScreenState extends ConsumerState<ConversionScreen> {
       final cached = _cache.getRates('USD');
       if (cached != null) {
         rates = cached;
+        currencyUnits = rates.keys.toList();
       } else {
-        final fiat = await _currency.fetchRates('USD');
-        final symbols = ['BTC','ETH','USDT','SOL','ADA'];
-        final crypto = await _crypto.fetchRatesUSD(symbols);
-        rates = {...fiat, ...crypto};
-        await _cache.setRates('USD', rates);
+        try {
+          final fiat = await _currency.fetchRates('USD');
+          final symbols = ['BTC','ETH','USDT','SOL','ADA'];
+          final crypto = await _crypto.fetchRatesUSD(symbols);
+          rates = {...fiat, ...crypto};
+          currencyUnits = rates.keys.toList();
+          await _cache.setRates('USD', rates);
+        } catch (e) {
+          error = 'Rate refresh failed';
+        }
       }
       setState(() {});
     }
@@ -67,29 +76,31 @@ class _ConversionScreenState extends ConsumerState<ConversionScreen> {
   Widget build(BuildContext context) {
     final cat = widget.args['category'] as String? ?? 'length';
     final c = categories.firstWhere((x) => x.key == cat);
+    final l = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(title: Text(c.label)),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(children: [
+          if (error.isNotEmpty) Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(borderRadius: BorderRadius.circular(8), border: Border.all(color: Theme.of(context).colorScheme.error)), child: Text(error)),
           Row(children: [
-            Expanded(child: DropdownButtonFormField<String>(value: fromUnit, items: c.units.map((u) => DropdownMenuItem(value: u.key, child: Text(u.label))).toList(), onChanged: (v) { fromUnit = v ?? fromUnit; setState(() {}); })),
+            Expanded(child: DropdownButtonFormField<String>(value: fromUnit, items: ((cat=='currency' && currencyUnits.isNotEmpty) ? currencyUnits.map((k) => DropdownMenuItem(value: k, child: Text(k))).toList() : c.units.map((u) => DropdownMenuItem(value: u.key, child: Text(u.label))).toList()), onChanged: (v) { fromUnit = v ?? fromUnit; setState(() {}); })),
             const SizedBox(width: 12),
             IconButton(onPressed: () { final t = fromUnit; fromUnit = toUnit; toUnit = t; setState(() {}); }, icon: const Icon(Icons.swap_horiz)),
             const SizedBox(width: 12),
-            Expanded(child: DropdownButtonFormField<String>(value: toUnit, items: c.units.map((u) => DropdownMenuItem(value: u.key, child: Text(u.label))).toList(), onChanged: (v) { toUnit = v ?? toUnit; setState(() {}); })),
+            Expanded(child: DropdownButtonFormField<String>(value: toUnit, items: ((cat=='currency' && currencyUnits.isNotEmpty) ? currencyUnits.map((k) => DropdownMenuItem(value: k, child: Text(k))).toList() : c.units.map((u) => DropdownMenuItem(value: u.key, child: Text(u.label))).toList()), onChanged: (v) { toUnit = v ?? toUnit; setState(() {}); })),
           ]),
           const SizedBox(height: 12),
-          TextFormField(keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Value'), onChanged: (s) { value = double.tryParse(s) ?? 0; }),
+          TextFormField(keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: InputDecoration(labelText: l.t('value')), onChanged: (s) { value = double.tryParse(s) ?? 0; }),
           const SizedBox(height: 12),
-          ElevatedButton(onPressed: () => _convert(cat), child: const Text('Convert')),
+          ElevatedButton(onPressed: () => _convert(cat), child: Text(l.t('convert'))),
           const SizedBox(height: 12),
           Text(result.toStringAsFixed(6)),
           const SizedBox(height: 12),
           Row(children: [
-            OutlinedButton(onPressed: () { final fav = {'category': cat, 'from': fromUnit, 'to': toUnit}; _cache.addFavorite(fav); _supabase.toggleFavorite(fav); }, child: const Text('Favorite')),
+            OutlinedButton(onPressed: () { final fav = {'category': cat, 'from': fromUnit, 'to': toUnit}; _cache.addFavorite(fav); _supabase.toggleFavorite(fav); }, child: Text(l.t('favorite'))),
             const SizedBox(width: 12),
-            if (cat == 'currency') OutlinedButton(onPressed: () => _refreshRatesIfNeeded(cat), child: const Text('Refresh Rates')),
+            if (cat == 'currency') OutlinedButton(onPressed: () => _refreshRatesIfNeeded(cat), child: Text(l.t('refresh_rates'))),
           ])
         ]),
       ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'localization/app_localizations.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'routes.dart';
 
@@ -25,6 +26,7 @@ class _UniversalConverterAppState extends State<UniversalConverterApp> {
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
+        AppLocalizationsDelegate(),
       ],
       supportedLocales: const [Locale('en'), Locale('es'), Locale('fr'), Locale('de')],
       routerConfig: appRouter,

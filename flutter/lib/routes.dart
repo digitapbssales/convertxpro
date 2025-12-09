@@ -4,6 +4,7 @@ import 'screens/conversion_screen.dart';
 import 'screens/history_screen.dart';
 import 'screens/favorites_screen.dart';
 import 'screens/auth_screen.dart';
+import 'screens/admin_banners_screen.dart';
 
 final appRouter = RouterConfig(
   routerDelegate: _delegate,
@@ -26,6 +27,7 @@ class _AppRouterDelegate extends RouterDelegate with ChangeNotifier, PopNavigato
         if (_path == '/history') const MaterialPage(child: HistoryScreen()),
         if (_path == '/favorites') const MaterialPage(child: FavoritesScreen()),
         if (_path == '/auth') const MaterialPage(child: AuthScreen()),
+        if (_path == '/admin') const MaterialPage(child: AdminBannersScreen()),
       ],
       onPopPage: (route, result) {
         if (!route.didPop(result)) return false;

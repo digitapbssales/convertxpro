@@ -631,6 +631,34 @@ export default function Converter({ queue, setQueue, fileInputRef, fetchDefiniti
                       </div>
                     ))}
                   </div>
+                  <div className="mt-3">
+                    <button
+                      className="btn-ghost"
+                      onClick={async () => {
+                        const { default: JSZip } = await import('jszip')
+                        const zip = new JSZip()
+                        for (let i = 0; i < (f.convertedUrls || []).length; i++) {
+                          const u = f.convertedUrls[i]
+                          const res = await fetch(u)
+                          const blob = await res.blob()
+                          const ext = (f.output && f.output.split('/')[1]) || 'png'
+                          const name = `${(f.name || 'file').replace(/\.[^./]+$/, '')}-p${i + 1}.${ext.replace('jpeg','jpg')}`
+                          zip.file(name, blob)
+                        }
+                        const content = await zip.generateAsync({ type: 'blob' })
+                        const url = URL.createObjectURL(content)
+                        const a = document.createElement('a')
+                        a.href = url
+                        a.download = `${(f.name || 'pages')}.zip`
+                        document.body.appendChild(a)
+                        a.click()
+                        a.remove()
+                        URL.revokeObjectURL(url)
+                      }}
+                    >
+                      Download All Pages (.zip)
+                    </button>
+                  </div>
                 </div>
               )}
 
