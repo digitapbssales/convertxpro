@@ -45,7 +45,19 @@ function isImage(file) {
 
 function getImageTargets(file) {
   if (!isImage(file)) return []
-  return ['image/png', 'image/jpeg', 'image/webp']
+  const targets = ['image/png', 'image/jpeg', 'image/webp']
+  if (supportsType('image/avif')) targets.push('image/avif')
+  return targets
+}
+
+function supportsType(type) {
+  try {
+    const c = document.createElement('canvas')
+    const url = c.toDataURL(type)
+    return url.startsWith(`data:${type}`)
+  } catch {
+    return false
+  }
 }
 
 function confettiBurst(canvas) {
@@ -82,6 +94,9 @@ function confettiBurst(canvas) {
 export default function Converter({ queue, setQueue, fileInputRef, fetchDefinition, warnAccessibility }) {
   const [hoverTip, setHoverTip] = useState({ text: '', x: 0, y: 0, show: false })
   const [released, setReleased] = useState('')
+  const [preset, setPreset] = useState('quality')
+  const [lockFormat, setLockFormat] = useState(false)
+  const [zoom, setZoom] = useState({ show: false, url: '', x: 0, y: 0 })
   const dropAudio = useRef(null)
   const doneAudio = useRef(null)
   const canvasRef = useRef(null)
@@ -98,6 +113,23 @@ export default function Converter({ queue, setQueue, fileInputRef, fetchDefiniti
       const targets = getImageTargets(file)
       const defaultTarget = targets.length ? targets[targets.length - 1] : ''
       const id = crypto.randomUUID()
+      const defaultQuality = preset === 'fast' ? 0.6 : 0.85
+      const defaultMax = preset === 'fast' ? 2048 : 4096
+      let width = null
+      let height = null
+      let previewUrl = ''
+      if (isImage(file)) {
+        previewUrl = URL.createObjectURL(file)
+        const img = document.createElement('img')
+        await new Promise((res) => {
+          img.onload = () => {
+            width = img.naturalWidth
+            height = img.naturalHeight
+            res()
+          }
+          img.src = previewUrl
+        })
+      }
       items.push({
         id,
         file,
@@ -111,7 +143,15 @@ export default function Converter({ queue, setQueue, fileInputRef, fetchDefiniti
         convertedBlob: null,
         convertedUrl: '',
         countdownEnd: 0,
-        remainingSec: 0
+        remainingSec: 0,
+        targetWidth: defaultMax,
+        targetHeight: defaultMax,
+        quality: defaultQuality,
+        progress: 0,
+        previewUrl,
+        width,
+        height,
+        errorMessage: ''
       })
     }
     setQueue((q) => [...q, ...items])
@@ -131,65 +171,74 @@ export default function Converter({ queue, setQueue, fileInputRef, fetchDefiniti
   }
 
   const convertItem = async (item) => {
-    setQueue((q) => q.map((f) => (f.id === item.id ? { ...f, status: 'processing' } : f)))
-    let convertedBlob = null
-    if (isImage(item.file) && item.output) {
-      const opts = {
-        fileType: item.output,
-        maxWidth: 4096,
-        maxHeight: 4096,
-        initialQuality: item.output === 'image/webp' ? 0.6 : 0.8,
-        useWebWorker: true
+    try {
+      setQueue((q) => q.map((f) => (f.id === item.id ? { ...f, status: 'processing', errorMessage: '' } : f)))
+      let convertedBlob = null
+      if (isImage(item.file) && item.output) {
+        const opts = {
+          fileType: item.output,
+          maxWidth: item.targetWidth || 4096,
+          maxHeight: item.targetHeight || 4096,
+          initialQuality: typeof item.quality === 'number' ? item.quality : item.output === 'image/webp' ? 0.6 : 0.8,
+          useWebWorker: true,
+          onProgress: (p) => {
+            setQueue((q) => q.map((f) => (f.id === item.id ? { ...f, progress: p } : f)))
+          }
+        }
+        try {
+          convertedBlob = await imageCompression(item.file, opts)
+        } catch {
+          const img = document.createElement('img')
+          const url = URL.createObjectURL(item.file)
+          await new Promise((res) => {
+            img.onload = res
+            img.src = url
+          })
+          const canvas = document.createElement('canvas')
+          canvas.width = img.naturalWidth
+          canvas.height = img.naturalHeight
+          const ctx = canvas.getContext('2d')
+          ctx.drawImage(img, 0, 0)
+          const mime = item.output || 'image/png'
+          const q = typeof item.quality === 'number' ? item.quality : mime.includes('jpeg') ? 0.8 : 0.92
+          const dataUrl = canvas.toDataURL(mime, q)
+          const res = await fetch(dataUrl)
+          convertedBlob = await res.blob()
+          URL.revokeObjectURL(url)
+        }
+      } else {
+        convertedBlob = item.file
       }
-      try {
-        convertedBlob = await imageCompression(item.file, opts)
-      } catch {
-        const img = document.createElement('img')
-        const url = URL.createObjectURL(item.file)
-        await new Promise((res) => {
-          img.onload = res
-          img.src = url
-        })
-        const canvas = document.createElement('canvas')
-        canvas.width = img.naturalWidth
-        canvas.height = img.naturalHeight
-        const ctx = canvas.getContext('2d')
-        ctx.drawImage(img, 0, 0)
-        const mime = item.output || 'image/png'
-        const dataUrl = canvas.toDataURL(mime, mime.includes('jpeg') ? 0.8 : 0.92)
-        const res = await fetch(dataUrl)
-        convertedBlob = await res.blob()
-        URL.revokeObjectURL(url)
-      }
-    } else {
-      convertedBlob = item.file
-    }
-    const reader = new FileReader()
-    const dataUrl = await new Promise((resolve) => {
-      reader.onload = () => resolve(reader.result)
-      reader.readAsDataURL(convertedBlob)
-    })
-    const countdownEnd = Date.now() + 5 * 60 * 1000
-    setQueue((q) =>
-      q.map((f) =>
-        f.id === item.id
-          ? {
-              ...f,
-              status: 'complete',
-              convertedBlob,
-              convertedUrl: dataUrl,
-              countdownEnd,
-              remainingSec: Math.ceil((countdownEnd - Date.now()) / 1000)
-            }
-          : f
+      const reader = new FileReader()
+      const dataUrl = await new Promise((resolve) => {
+        reader.onload = () => resolve(reader.result)
+        reader.readAsDataURL(convertedBlob)
+      })
+      const countdownEnd = Date.now() + 5 * 60 * 1000
+      setQueue((q) =>
+        q.map((f) =>
+          f.id === item.id
+            ? {
+                ...f,
+                status: 'complete',
+                convertedBlob,
+                convertedUrl: dataUrl,
+                countdownEnd,
+                remainingSec: Math.ceil((countdownEnd - Date.now()) / 1000),
+                errorMessage: ''
+              }
+            : f
+        )
       )
-    )
-    if (doneAudio.current) doneAudio.current.play()
-    const c = canvasRef.current
-    if (c) {
-      c.width = c.offsetWidth
-      c.height = c.offsetHeight
-      confettiBurst(c)
+      if (doneAudio.current) doneAudio.current.play()
+      const c = canvasRef.current
+      if (c) {
+        c.width = c.offsetWidth
+        c.height = c.offsetHeight
+        confettiBurst(c)
+      }
+    } catch (e) {
+      setQueue((q) => q.map((f) => (f.id === item.id ? { ...f, status: 'failed', errorMessage: String(e && e.message ? e.message : 'Conversion failed') } : f)))
     }
   }
 
@@ -217,9 +266,19 @@ export default function Converter({ queue, setQueue, fileInputRef, fetchDefiniti
   }, [setQueue])
 
   const onChangeOutput = async (id, value, e) => {
-    setQueue((q) =>
-      q.map((f) => (f.id === id ? { ...f, output: value, predicted: predictSizeChange(f.file, value) } : f))
-    )
+    if (lockFormat) {
+      setQueue((q) =>
+        q.map((f) =>
+          f.status === 'pending'
+            ? { ...f, output: value, predicted: predictSizeChange(f.file, value) }
+            : f
+        )
+      )
+    } else {
+      setQueue((q) =>
+        q.map((f) => (f.id === id ? { ...f, output: value, predicted: predictSizeChange(f.file, value) } : f))
+      )
+    }
     if (value.toLowerCase().includes('pdf/a')) warnAccessibility('Converting to PDF/A may reduce accessibility tags')
     if (e) {
       const rect = e.target.getBoundingClientRect()
@@ -242,7 +301,24 @@ export default function Converter({ queue, setQueue, fileInputRef, fetchDefiniti
     await navigator.clipboard.writeText(u)
   }
 
-  const formats = useMemo(() => ['image/png', 'image/jpeg', 'image/webp', 'PDF/A'], [])
+  const formats = useMemo(() => ['image/png', 'image/jpeg', 'image/webp', ...(supportsType('image/avif') ? ['image/avif'] : [])], [])
+
+  useEffect(() => {
+    const onPaste = async (e) => {
+      const files = []
+      if (e.clipboardData && e.clipboardData.items) {
+        for (const it of e.clipboardData.items) {
+          if (it.kind === 'file') {
+            const f = it.getAsFile()
+            if (f) files.push(f)
+          }
+        }
+      }
+      if (files.length) await addFiles(files)
+    }
+    window.addEventListener('paste', onPaste)
+    return () => window.removeEventListener('paste', onPaste)
+  }, [])
 
   return (
     <div className="relative">
@@ -277,19 +353,65 @@ export default function Converter({ queue, setQueue, fileInputRef, fetchDefiniti
       <div className="mt-6">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-lg font-semibold">Conversion Queue</h3>
-          <button className="btn-primary" onClick={startAll}>
-            {(() => {
-              const pending = queue.filter((f) => f.status === 'pending')
-              if (pending.length === 0) return 'Convert'
-              const sample = pending[0]
-              const pred = sample.predicted
-              const ext = sample.output || ''
-              if (pred && ext && isImage(sample.file)) {
-                return `Convert ${formatMB(pred.fromMB)} ${sample.type.split('/')[1].toUpperCase()} to ${formatMB(pred.toMB)} ${ext.split('/')[1].toUpperCase()}`
-              }
-              return 'Convert'
-            })()}
-          </button>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 text-xs">
+              <span>Preset:</span>
+              <button
+                className={`btn-ghost ${preset === 'fast' ? 'ring-1 ring-indigo-500' : ''}`}
+                onClick={() => setPreset('fast')}
+                title="Smaller, faster, lower quality"
+              >
+                Fast
+              </button>
+              <button
+                className={`btn-ghost ${preset === 'quality' ? 'ring-1 ring-indigo-500' : ''}`}
+                onClick={() => setPreset('quality')}
+                title="Higher quality, larger files"
+              >
+                High Quality
+              </button>
+            </div>
+            <button className="btn-primary" onClick={startAll}>
+              {(() => {
+                const pending = queue.filter((f) => f.status === 'pending')
+                if (pending.length === 0) return 'Convert'
+                const sample = pending[0]
+                const pred = sample.predicted
+                const ext = sample.output || ''
+                if (pred && ext && isImage(sample.file)) {
+                  return `Convert ${formatMB(pred.fromMB)} ${sample.type.split('/')[1].toUpperCase()} to ${formatMB(pred.toMB)} ${ext.split('/')[1].toUpperCase()}`
+                }
+                return 'Convert'
+              })()}
+            </button>
+            <button
+              className="btn-ghost"
+              onClick={() => setQueue((q) => q.filter((f) => f.status !== 'complete'))}
+            >
+              Clear Completed
+            </button>
+            <button
+              className="btn-ghost"
+              onClick={() => setQueue((q) => q.filter((f) => f.status !== 'pending'))}
+            >
+              Remove Pending
+            </button>
+            <button
+              className="btn-ghost"
+              onClick={() => setQueue((q) => q.filter((f) => f.status !== 'failed'))}
+            >
+              Remove Failed
+            </button>
+            <div className="flex items-center gap-1 text-xs ml-2">
+              <span>Lock Format</span>
+              <button
+                className={`btn-ghost ${lockFormat ? 'ring-1 ring-indigo-500' : ''}`}
+                onClick={() => setLockFormat((s) => !s)}
+              >
+                {lockFormat ? 'On' : 'Off'}
+              </button>
+            </div>
+          </div>
         </div>
 
         <ul className="space-y-3">
@@ -303,19 +425,38 @@ export default function Converter({ queue, setQueue, fileInputRef, fetchDefiniti
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  {isImage(f.file) && (
+                    <div className="flex items-center gap-2 mr-2">
+                      <img
+                        src={f.previewUrl}
+                        alt="src"
+                        className="h-10 w-10 object-cover rounded border border-slate-700"
+                        onMouseEnter={(e) => {
+                          const rect = e.currentTarget.getBoundingClientRect()
+                          setZoom({ show: true, url: f.previewUrl, x: rect.right + 8, y: rect.top })
+                        }}
+                        onMouseLeave={() => setZoom((z) => ({ ...z, show: false }))}
+                        onMouseMove={(e) => setZoom((z) => ({ ...z, x: e.clientX + 12, y: e.clientY - 12 }))}
+                      />
+                      {f.status === 'complete' && (
+                        <img
+                          src={f.convertedUrl}
+                          alt="out"
+                          className="h-10 w-10 object-cover rounded border border-green-700"
+                          onMouseEnter={(e) => {
+                            const rect = e.currentTarget.getBoundingClientRect()
+                            setZoom({ show: true, url: f.convertedUrl, x: rect.right + 8, y: rect.top })
+                          }}
+                          onMouseLeave={() => setZoom((z) => ({ ...z, show: false }))}
+                          onMouseMove={(e) => setZoom((z) => ({ ...z, x: e.clientX + 12, y: e.clientY - 12 }))}
+                        />
+                      )}
+                    </div>
+                  )}
                   <select
                     className="select"
                     value={f.output || ''}
-                    onMouseEnter={(e) => {
-                      const opt = e.target.value
-                      if (opt.toLowerCase().includes('pdf/a')) {
-                        fetchDefinition('PDF/A').then((text) => {
-                          const rect = e.target.getBoundingClientRect()
-                          setHoverTip({ text, x: rect.left + rect.width / 2, y: rect.top - 8, show: true })
-                          setTimeout(() => setHoverTip((t) => ({ ...t, show: false })), 2400)
-                        })
-                      }
-                    }}
+                    onMouseEnter={() => {}}
                     onChange={(e) => onChangeOutput(f.id, e.target.value, e)}
                   >
                     <option value="">{f.output ? f.output : 'Choose output'}</option>
@@ -332,14 +473,84 @@ export default function Converter({ queue, setQueue, fileInputRef, fetchDefiniti
                   >
                     {f.status === 'pending' ? 'Convert' : f.status === 'processing' ? 'Processing' : 'Done'}
                   </button>
+                  <button
+                    className="btn-ghost"
+                    onClick={() => setQueue((q) => q.filter((x) => x.id !== f.id))}
+                  >
+                    Remove
+                  </button>
                 </div>
               </div>
+
+              {isImage(f.file) && (
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-xs text-slate-400">Width</label>
+                    <input
+                      type="number"
+                      min={1}
+                      className="input w-full"
+                      value={f.targetWidth || ''}
+                      placeholder="auto"
+                      onChange={(e) =>
+                        setQueue((q) => q.map((x) => (x.id === f.id ? { ...x, targetWidth: e.target.value ? parseInt(e.target.value) : null } : x)))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400">Height</label>
+                    <input
+                      type="number"
+                      min={1}
+                      className="input w-full"
+                      value={f.targetHeight || ''}
+                      placeholder="auto"
+                      onChange={(e) =>
+                        setQueue((q) => q.map((x) => (x.id === f.id ? { ...x, targetHeight: e.target.value ? parseInt(e.target.value) : null } : x)))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400">Quality</label>
+                    <input
+                      type="range"
+                      min={10}
+                      max={100}
+                      step={1}
+                      value={Math.round((f.quality || 0.8) * 100)}
+                      onChange={(e) =>
+                        setQueue((q) => q.map((x) => (x.id === f.id ? { ...x, quality: parseInt(e.target.value) / 100 } : x)))
+                      }
+                    />
+                  </div>
+                </div>
+              )}
+
+              {isImage(f.file) && (
+                <div className="mt-2 text-xs text-slate-400">
+                  {(f.width && f.height) ? `${f.width}×${f.height}px` : ''}
+                </div>
+              )}
+
+              {f.status === 'processing' && (
+                <div className="mt-3">
+                  <div className="h-2 w-full bg-slate-700 rounded">
+                    <div
+                      className="h-2 bg-indigo-500 rounded"
+                      style={{ width: `${Math.min(100, Math.max(0, Math.round(f.progress || 0)))}%` }}
+                    />
+                  </div>
+                  <div className="text-xs text-slate-400 mt-1">{Math.round(f.progress || 0)}%</div>
+                </div>
+              )}
 
               {f.status === 'complete' && (
                 <div className="mt-3 flex items-center justify-between">
                   <a
                     href={f.convertedUrl}
-                    download={f.name}
+                    download={(f.output && f.output.startsWith('image/'))
+                      ? `${(f.name || 'file').replace(/\.[^./]+$/, '')}.${(f.output.split('/')[1] || 'png').replace('jpeg','jpg')}`
+                      : f.name}
                     className="btn-ghost"
                   >
                     Download
@@ -350,6 +561,16 @@ export default function Converter({ queue, setQueue, fileInputRef, fetchDefiniti
                   <button className="btn-ghost" onClick={() => copyDataUrl(f.convertedUrl)}>
                     Copy Data URL
                   </button>
+                  <button className="btn-ghost" onClick={() => setQueue((q) => q.filter((x) => x.id !== f.id))}>
+                    Clean Now
+                  </button>
+                </div>
+              )}
+
+              {f.status === 'failed' && (
+                <div className="mt-3 flex items-center justify-between">
+                  <div className="text-xs text-red-400 truncate">{f.errorMessage}</div>
+                  <button className="btn-ghost" onClick={() => convertItem(f)}>Retry</button>
                 </div>
               )}
             </li>
@@ -363,6 +584,15 @@ export default function Converter({ queue, setQueue, fileInputRef, fetchDefiniti
           style={{ left: hoverTip.x, top: hoverTip.y, transform: 'translate(-50%, -100%)' }}
         >
           {hoverTip.text}
+        </div>
+      )}
+
+      {zoom.show && zoom.url && (
+        <div
+          className="fixed z-50 pointer-events-none"
+          style={{ left: zoom.x, top: zoom.y }}
+        >
+          <img src={zoom.url} className="h-40 w-40 object-contain rounded-lg border border-indigo-500/40 shadow-lg" />
         </div>
       )}
     </div>
