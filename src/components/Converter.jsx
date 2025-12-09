@@ -106,7 +106,7 @@ export default function Converter({ queue, setQueue, fileInputRef, fetchDefiniti
     doneAudio.current = new Audio(doneSound)
   }, [])
 
-  const addFiles = async (files) => {
+  const addFiles = React.useCallback(async (files) => {
     const items = []
     for (const file of files) {
       const hash = await sha256(file)
@@ -156,7 +156,7 @@ export default function Converter({ queue, setQueue, fileInputRef, fetchDefiniti
     }
     setQueue((q) => [...q, ...items])
     if (dropAudio.current) dropAudio.current.play()
-  }
+  }, [preset, setQueue])
 
   const onDrop = async (e) => {
     e.preventDefault()
@@ -355,7 +355,7 @@ export default function Converter({ queue, setQueue, fileInputRef, fetchDefiniti
     }
     window.addEventListener('paste', onPaste)
     return () => window.removeEventListener('paste', onPaste)
-  }, [])
+  }, [addFiles])
 
   return (
     <div className="relative">

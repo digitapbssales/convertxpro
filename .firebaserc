@@ -1,5 +1,5 @@
 {
   "projects": {
-    "default": "convertxpro-ff904"
+    "default": "YOUR_FIREBASE_PROJECT_ID"
   }
 }
