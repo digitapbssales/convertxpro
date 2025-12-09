@@ -1,0 +1,24 @@
+name: universal_converter
+description: Universal Unit & Value Conversions Web App
+publish_to: 'none'
+version: 1.0.0+1
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+dependencies:
+  flutter: { sdk: flutter }
+  cupertino_icons: ^1.0.6
+  flutter_localizations: { sdk: flutter }
+  intl: ^0.19.0
+  riverpod: ^2.6.1
+  flutter_riverpod: ^2.6.1
+  get_it: ^7.6.7
+  http: ^1.2.2
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  supabase_flutter: ^2.5.6
+  sentry_flutter: ^8.8.0
+dev_dependencies:
+  flutter_test: { sdk: flutter }
+  flutter_lints: ^4.0.0
+flutter:
+  uses-material-design: true
