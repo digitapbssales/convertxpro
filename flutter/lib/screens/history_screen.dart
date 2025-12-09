@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/supabase_service.dart';
+import '../localization/app_localizations.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -21,8 +22,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('History')),
+      appBar: AppBar(title: Text(l.t('history'))),
       body: ListView.builder(
         itemCount: items.length,
         itemBuilder: (c, i) {

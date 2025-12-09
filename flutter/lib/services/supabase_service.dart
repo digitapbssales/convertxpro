@@ -41,4 +41,10 @@ class SupabaseService {
     final uid = supabase.auth.currentUser?.id;
     await supabase.from('audit_logs').insert({'user_id': uid, 'action': action, 'meta': meta});
   }
+  Future<bool> isAdmin() async {
+    final uid = supabase.auth.currentUser?.id;
+    if (uid == null) return false;
+    final res = await supabase.from('admins').select('user_id').eq('user_id', uid).limit(1);
+    return (res is List && res.isNotEmpty);
+  }
 }

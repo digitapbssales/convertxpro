@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/supabase_service.dart';
+import '../localization/app_localizations.dart';
 
 class FavoritesScreen extends StatefulWidget {
   const FavoritesScreen({super.key});
@@ -21,8 +22,9 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   }
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Favorites')),
+      appBar: AppBar(title: Text(l.t('favorites'))),
       body: ListView.builder(
         itemCount: items.length,
         itemBuilder: (c, i) {

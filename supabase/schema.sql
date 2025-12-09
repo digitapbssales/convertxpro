@@ -56,3 +56,11 @@ create table if not exists banners (
 );
 alter table banners enable row level security;
 create policy banners_public on banners for select using (true);
+
+create table if not exists admins (
+  user_id uuid primary key
+);
+
+create policy banners_insert on banners for insert with check (
+  exists (select 1 from admins a where a.user_id = auth.uid())
+);

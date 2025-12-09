@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/supabase_service.dart';
 import '../services/cache_service.dart';
+import '../localization/app_localizations.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -16,8 +17,9 @@ class _AuthScreenState extends State<AuthScreen> {
   final _cache = CacheService();
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Sign In')),
+      appBar: AppBar(title: Text(l.t('sign_in'))),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(children: [
@@ -25,9 +27,9 @@ class _AuthScreenState extends State<AuthScreen> {
           const SizedBox(height: 12),
           TextFormField(controller: _pass, decoration: const InputDecoration(labelText: 'Password'), obscureText: true),
           const SizedBox(height: 12),
-          ElevatedButton(onPressed: () async { try { await _svc.signInWithEmail(_email.text, _pass.text); final hist = _cache.loadHistory(); final favs = _cache.loadFavorites(); for (final h in hist) { await _svc.saveHistory({'category': h['category'], 'from': h['from'], 'to': h['to'], 'value': h['value'], 'result': h['result']}); } for (final f in favs) { await _svc.toggleFavorite({'category': f['category'], 'from': f['from'], 'to': f['to']}); } setState(() { msg = 'Signed in'; }); } catch (e) { setState(() { msg = 'Error'; }); } }, child: const Text('Sign In')),
+          ElevatedButton(onPressed: () async { try { await _svc.signInWithEmail(_email.text, _pass.text); final hist = _cache.loadHistory(); final favs = _cache.loadFavorites(); for (final h in hist) { await _svc.saveHistory({'category': h['category'], 'from': h['from'], 'to': h['to'], 'value': h['value'], 'result': h['result']}); } for (final f in favs) { await _svc.toggleFavorite({'category': f['category'], 'from': f['from'], 'to': f['to']}); } setState(() { msg = l.t('sign_in'); }); } catch (e) { setState(() { msg = 'Error'; }); } }, child: Text(l.t('sign_in'))),
           const SizedBox(height: 12),
-          ElevatedButton(onPressed: () async { await _svc.signOut(); setState(() { msg = 'Signed out'; }); }, child: const Text('Sign Out')),
+          ElevatedButton(onPressed: () async { await _svc.signOut(); setState(() { msg = l.t('sign_out'); }); }, child: Text(l.t('sign_out'))),
           const SizedBox(height: 12),
           Text(msg),
         ]),

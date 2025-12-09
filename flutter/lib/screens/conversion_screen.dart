@@ -47,13 +47,17 @@ class _ConversionScreenState extends ConsumerState<ConversionScreen> {
       } else {
         try {
           final fiat = await _currency.fetchRates('USD');
-          final symbols = ['BTC','ETH','USDT','SOL','ADA'];
-          final crypto = await _crypto.fetchRatesUSD(symbols);
+          final crypto = await _crypto.fetchTopRatesUSD(perPage: 50);
           rates = {...fiat, ...crypto};
           currencyUnits = rates.keys.toList();
           await _cache.setRates('USD', rates);
         } catch (e) {
           error = 'Rate refresh failed';
+          try {
+            final cryptoSmall = await _crypto.fetchTopRatesUSD(perPage: 10);
+            rates = {...(rates.isNotEmpty ? rates : {'USD': 1.0}), ...cryptoSmall};
+            currencyUnits = rates.keys.toList();
+          } catch (_) {}
         }
       }
       setState(() {});

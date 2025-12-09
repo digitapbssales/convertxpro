@@ -29,13 +29,17 @@ class HomeScreen extends StatelessWidget {
     final bannerSvc = BannerService();
     final cache = CacheService();
     final l = AppLocalizations.of(context);
-    return Scaffold(
-      appBar: AppBar(title: Text(l.t('app_title')), actions: [
-        IconButton(onPressed: () => _router(context).go('/favorites'), icon: const Icon(Icons.star)),
-        IconButton(onPressed: () => _router(context).go('/history'), icon: const Icon(Icons.history)),
-        IconButton(onPressed: () => _router(context).go('/auth'), icon: const Icon(Icons.person)),
-        IconButton(onPressed: () => _router(context).go('/admin'), icon: const Icon(Icons.campaign)),
-      ]),
+    return FutureBuilder<bool>(
+      future: SupabaseService().isAdmin(),
+      builder: (ctx, snap) {
+        final isAdmin = snap.data == true;
+        return Scaffold(
+          appBar: AppBar(title: Text(l.t('app_title')), actions: [
+            IconButton(onPressed: () => _router(context).go('/favorites'), icon: const Icon(Icons.star)),
+            IconButton(onPressed: () => _router(context).go('/history'), icon: const Icon(Icons.history)),
+            IconButton(onPressed: () => _router(context).go('/auth'), icon: const Icon(Icons.person)),
+            if (isAdmin) IconButton(onPressed: () => _router(context).go('/admin'), icon: const Icon(Icons.campaign)),
+          ]),
       body: FutureBuilder(
         future: bannerSvc.loadActive(),
         builder: (c, s) {
@@ -73,6 +77,8 @@ class HomeScreen extends StatelessWidget {
           );
         },
       ),
+        );
+      },
     );
   }
   _AppRouterDelegate _router(BuildContext c) {
