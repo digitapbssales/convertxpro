@@ -44,3 +44,15 @@ create policy favorites_select on favorites for select using (auth.uid() = user_
 create policy favorites_insert on favorites for insert with check (auth.uid() = user_id);
 create policy audit_select on audit_logs for select using (auth.uid() = user_id);
 create policy audit_insert on audit_logs for insert with check (auth.uid() = user_id);
+
+create table if not exists banners (
+  id bigint generated always as identity primary key,
+  title text,
+  message text,
+  image_url text,
+  link_url text,
+  active boolean default true,
+  created_at timestamp with time zone default now()
+);
+alter table banners enable row level security;
+create policy banners_public on banners for select using (true);

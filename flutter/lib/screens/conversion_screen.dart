@@ -5,6 +5,7 @@ import '../conversion/categories.dart';
 import '../services/currency_service.dart';
 import '../services/crypto_service.dart';
 import '../services/supabase_service.dart';
+import '../services/cache_service.dart';
 
 final _engine = ConversionEngine();
 final _currency = CurrencyService();
@@ -24,6 +25,7 @@ class _ConversionScreenState extends ConsumerState<ConversionScreen> {
   double value = 0;
   double result = 0;
   Map<String, double> rates = {};
+  final _cache = CacheService();
   @override
   void initState() {
     super.initState();
@@ -35,23 +37,31 @@ class _ConversionScreenState extends ConsumerState<ConversionScreen> {
   }
   Future<void> _refreshRatesIfNeeded(String cat) async {
     if (cat == 'currency') {
-      final fiat = await _currency.fetchRates('USD');
-      final symbols = ['BTC','ETH','USDT','SOL','ADA'];
-      final crypto = await _crypto.fetchRatesUSD(symbols);
-      rates = {...fiat, ...crypto};
+      final cached = _cache.getRates('USD');
+      if (cached != null) {
+        rates = cached;
+      } else {
+        final fiat = await _currency.fetchRates('USD');
+        final symbols = ['BTC','ETH','USDT','SOL','ADA'];
+        final crypto = await _crypto.fetchRatesUSD(symbols);
+        rates = {...fiat, ...crypto};
+        await _cache.setRates('USD', rates);
+      }
       setState(() {});
     }
   }
   void _convert(String cat) {
     result = _engine.convert(cat, fromUnit, toUnit, value, liveRates: rates);
     setState(() {});
-    _supabase.saveHistory({
+    final item = {
       'category': cat,
       'from': fromUnit,
       'to': toUnit,
       'value': value,
       'result': result,
-    });
+    };
+    _cache.addHistory(item);
+    _supabase.saveHistory(item);
   }
   @override
   Widget build(BuildContext context) {
@@ -77,7 +87,7 @@ class _ConversionScreenState extends ConsumerState<ConversionScreen> {
           Text(result.toStringAsFixed(6)),
           const SizedBox(height: 12),
           Row(children: [
-            OutlinedButton(onPressed: () => _supabase.toggleFavorite({'category': cat, 'from': fromUnit, 'to': toUnit}), child: const Text('Favorite')),
+            OutlinedButton(onPressed: () { final fav = {'category': cat, 'from': fromUnit, 'to': toUnit}; _cache.addFavorite(fav); _supabase.toggleFavorite(fav); }, child: const Text('Favorite')),
             const SizedBox(width: 12),
             if (cat == 'currency') OutlinedButton(onPressed: () => _refreshRatesIfNeeded(cat), child: const Text('Refresh Rates')),
           ])

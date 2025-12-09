@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../routes.dart';
 import '../widgets/category_tile.dart';
+import '../services/banner_service.dart';
+import '../services/cache_service.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -23,18 +25,51 @@ class HomeScreen extends StatelessWidget {
       CategoryTile(label: 'Angle', icon: Icons.rotate_right, route: '/convert', args: {'category': 'angle'}),
       CategoryTile(label: 'Cooking', icon: Icons.kitchen, route: '/convert', args: {'category': 'cooking'}),
     ];
+    final controller = TextEditingController();
+    final bannerSvc = BannerService();
+    final cache = CacheService();
     return Scaffold(
       appBar: AppBar(title: const Text('Universal Converter'), actions: [
         IconButton(onPressed: () => _router(context).go('/favorites'), icon: const Icon(Icons.star)),
         IconButton(onPressed: () => _router(context).go('/history'), icon: const Icon(Icons.history)),
         IconButton(onPressed: () => _router(context).go('/auth'), icon: const Icon(Icons.person)),
       ]),
-      body: GridView.count(
-        crossAxisCount: 2,
-        padding: const EdgeInsets.all(16),
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-        children: tiles,
+      body: FutureBuilder(
+        future: bannerSvc.loadActive(),
+        builder: (c, s) {
+          final banners = (s.data as List<Map<String, dynamic>>?) ?? [];
+          final recent = cache.loadHistory().reversed.take(5).toList();
+          final filtered = tiles.where((t) => t.label.toLowerCase().contains(controller.text.toLowerCase())).toList();
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              if (banners.isNotEmpty)
+                Container(
+                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(.2))),
+                  padding: const EdgeInsets.all(12),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(banners.first['title'] ?? '', style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 6),
+                    Text(banners.first['message'] ?? ''),
+                  ]),
+                ),
+              const SizedBox(height: 12),
+              TextField(controller: controller, decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search')), 
+              const SizedBox(height: 12),
+              GridView.count(
+                crossAxisCount: 2,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+                children: filtered,
+              ),
+              const SizedBox(height: 16),
+              if (recent.isNotEmpty) Text('Recent', style: Theme.of(context).textTheme.titleMedium),
+              for (final x in recent) ListTile(title: Text('${x['category']} ${x['from']}→${x['to']}'), subtitle: Text('${x['value']} = ${x['result']}')),
+            ],
+          );
+        },
       ),
     );
   }
