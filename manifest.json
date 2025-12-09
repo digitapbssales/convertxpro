@@ -1,0 +1,24 @@
+{
+  "name": "ConvertX Pro 2.0",
+  "short_name": "ConvertX",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#6366f1",
+  "description": "Client-side file conversion and AI assistance",
+  "icons": [
+    {
+      "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAIAAABwYI3/AAAACXBIWXMAAAsTAAALEwEAmpwYAAAAGElEQVR4nO3BMQEAAAgEIP7/1G0QhYAAAAAAAAAAwJw5CAAAeR3QpgAAAABJRU5ErkJggg==",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAAAAAA3K7AmAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAGElEQVR4nO3BMQEAAAgEIP7/1G0QhYAAAAAAAAAAwJw5CAAAeR3QpgAAAABJRU5ErkJggg==",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

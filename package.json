@@ -1,0 +1,28 @@
+{
+  "name": "convertx-pro-2",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "deploy:firebase": "vite build && firebase deploy",
+    "deploy:preview": "vite build && firebase hosting:channel:deploy preview"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.11.0",
+    "browser-image-compression": "^2.0.1",
+    "firebase": "^11.0.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.35",
+    "tailwindcss": "^3.4.3",
+    "vite": "^5.0.0",
+    "@vitejs/plugin-react": "^4.2.0",
+    "firebase-tools": "^13.0.2"
+  }
+}
